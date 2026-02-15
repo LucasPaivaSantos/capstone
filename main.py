@@ -3,11 +3,13 @@ import importlib
 import os
 import pkgutil
 import sys
+import traceback
 
 from models.base import MODEL_REGISTRY
 from objectives.base import OBJECTIVE_REGISTRY
 from strategies.base import STRATEGY_REGISTRY
 
+from utils.data_loader import load_and_validate_csv
 
 def load_modules(package_name):
     """
@@ -137,6 +139,15 @@ def main():
 
     # get arguments
     args = handle_cli_args()
+
+    try:
+        X, y = load_and_validate_csv(args.csv_path)
+
+    except Exception as e:
+        # for erros I didn't anticipate
+        print(f"\nUnexpected Error: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
 
 
