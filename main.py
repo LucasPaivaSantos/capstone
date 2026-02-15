@@ -1,5 +1,6 @@
 import argparse
 import importlib
+import numpy as np
 import os
 import pkgutil
 import sys
@@ -58,7 +59,7 @@ def handle_cli_args():
     # strategy arguments
     parser.add_argument(
         "--strategy", "-s",
-        required=True, 
+        # required=True, 
         choices=STRATEGY_REGISTRY.keys(),
         help="Validation Strategy"
     )
@@ -142,6 +143,16 @@ def main():
 
     try:
         X, y = load_and_validate_csv(args.csv_path)
+
+        # generate or use provided seeds
+        model_seed = args.model_seed if args.model_seed is not None else np.random.randint(0, 100)
+        strategy_seed = args.strategy_seed if args.strategy_seed is not None else np.random.randint(0, 100)
+
+        print(f"\nInitializing Model: {args.model}")
+        if args.model != 'svr':
+            print(f" with seed {model_seed}")
+        model_cls = MODEL_REGISTRY[args.model]
+
 
     except Exception as e:
         # for erros I didn't anticipate
