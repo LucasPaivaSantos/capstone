@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  capstone:
+    build: .
+    volumes:
+      - ~/Projects/Python/capstone:/app
+    stdin_open: true
+    tty: true
+
