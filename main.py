@@ -148,11 +148,15 @@ def main():
         model_seed = args.model_seed if args.model_seed is not None else np.random.randint(0, 100)
         strategy_seed = args.strategy_seed if args.strategy_seed is not None else np.random.randint(0, 100)
 
-        print(f"\nInitializing Model: {args.model}")
+        print(f"\nInitializing Model: {args.model}") # TODO: all the info printed should also be written in a file
         if args.model != 'svr':
             print(f" with seed {model_seed}")
-        model_cls = MODEL_REGISTRY[args.model]
+        model_cls = MODEL_REGISTRY[args.model] # pick the class from the registry
+        model_instance = model_cls(seed=model_seed) # instantiate the model with the seed
 
+        print(f"\nExecuting Strategy: {args.strategy} with seed {strategy_seed}")
+        strategy_cls = STRATEGY_REGISTRY[args.strategy]
+        strategy_instance = strategy_cls(seed=strategy_seed)
 
     except Exception as e:
         # for erros I didn't anticipate
