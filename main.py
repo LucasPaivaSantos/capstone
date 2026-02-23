@@ -155,8 +155,30 @@ def main():
         model_instance = model_cls(seed=model_seed) # instantiate the model with the seed
 
         print(f"\nExecuting Strategy: {args.strategy} with seed {strategy_seed}")
-        strategy_cls = STRATEGY_REGISTRY[args.strategy]
+        strategy_cls = STRATEGY_REGISTRY[args.strategy] # pick the class from the registry
         strategy_instance = strategy_cls(seed=strategy_seed)
+
+        # prepare evaluation kwargs based on strategy
+        eval_kwargs = {}
+        if args.strategy == 'train-split':
+            eval_kwargs['test_size'] = args.test_size
+            print(f"Configuration: Test Size = {args.test_size}")
+        elif args.strategy == 'k-fold':
+            eval_kwargs['n_splits'] = args.n_splits
+            print(f"Configuration: Number of Folds = {args.n_splits}")
+
+        # run evaluation
+        model_evaluation = strategy_instance.evaluate(model_instance, X, y, **eval_kwargs)
+        
+        # print model evaluation results
+        print("\nEvaluation Metrics:")
+        for metric, value in model_evaluation.items():
+            print(f" - {metric}: {value}")
+        
+        print("Retraining model for optimization") # model trained on full dataset for optimization, same seed
+        model_instance.fit(X, y)
+
+        objective_instances = [OBJECTIVE_REGISTRY[obj_name]() for obj_name in args.objectives] # pick the classes from the registries
 
     except Exception as e:
         # for erros I didn't anticipate
