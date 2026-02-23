@@ -93,7 +93,7 @@ def handle_cli_args():
         nargs='+',
         choices=list(OBJECTIVE_REGISTRY.keys()),
         default=[],
-        help="Additional objectives to optimize (strength is always included). Options: co2, cost"
+        help="Additional objectives to optimize (strength is always included)."
     )
     parser.add_argument(
         "--pop_size",
