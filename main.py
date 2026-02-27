@@ -10,7 +10,9 @@ from models.base import MODEL_REGISTRY
 from objectives.base import OBJECTIVE_REGISTRY
 from strategies.base import STRATEGY_REGISTRY
 
+from optimization.optimizer import run_optimization
 from utils.data_loader import load_and_validate_csv
+from utils.logger import ExperimentLogger
 
 def load_modules(package_name):
     """
@@ -148,7 +150,11 @@ def main():
         model_seed = args.model_seed if args.model_seed is not None else np.random.randint(0, 100)
         strategy_seed = args.strategy_seed if args.strategy_seed is not None else np.random.randint(0, 100)
 
-        print(f"\nInitializing Model: {args.model}") # TODO: all the info printed should also be written in a file
+        # save experiment config
+        logger = ExperimentLogger(base_dir="experiments")
+        logger.log_config(args, model_seed, strategy_seed)
+
+        print(f"\nInitializing Model: {args.model}")
         if args.model != 'svr':
             print(f" with seed {model_seed}")
         model_cls = MODEL_REGISTRY[args.model] # pick the class from the registry
@@ -169,6 +175,9 @@ def main():
 
         # run evaluation
         model_evaluation = strategy_instance.evaluate(model_instance, X, y, **eval_kwargs)
+
+        # save evaluation metrics
+        logger.log_evaluation(model_evaluation)
         
         # print model evaluation results
         print("\nEvaluation Metrics:")
@@ -178,7 +187,18 @@ def main():
         print("Retraining model for optimization") # model trained on full dataset for optimization, same seed
         model_instance.fit(X, y)
 
-        objective_instances = [OBJECTIVE_REGISTRY[obj_name]() for obj_name in args.objectives] # pick the classes from the registries
+        # run optimization
+        optimization_results = None
+        objective_instances = [OBJECTIVE_REGISTRY[obj_name]() for obj_name in args.objectives] # pick the classes from the registry
+        best_solutions, best_fitness, feat_names, history_pareto_fronts, history_best_strength = run_optimization(
+                model=model_instance,
+                X_train=X,
+                pop_size=args.pop_size,
+                n_gen=args.n_gen,
+                seed=model_seed,
+                objectives=objective_instances
+            )
+        
 
     except Exception as e:
         # for erros I didn't anticipate
