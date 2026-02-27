@@ -18,16 +18,19 @@ class NpEncoder(json.JSONEncoder):
         return super(NpEncoder, self).default(obj)
 
 class ExperimentLogger:
-    def __init__(self, base_dir="experiments"):
+    def __init__(self, model_name, strategy_name, base_dir="experiments"):
         """
-        Create a unique directory with current timestamp.
+        Create a unique directory with current timestamp nested under model and strategy.
         """
         self.base_dir = base_dir
         # YYYYMMDD_HHMMSS
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_dir = os.path.join(self.base_dir, f"exp_{timestamp}")
         
-        os.makedirs(self.log_dir, exist_ok=True) # also creates experiments directory if it doesn't exist
+        # build the nested path
+        self.log_dir = os.path.join(self.base_dir, model_name, strategy_name, f"exp_{timestamp}")
+        
+        # creates all necessary parent directories
+        os.makedirs(self.log_dir, exist_ok=True) 
 
     def log_config(self, args, model_seed, strategy_seed):
         """
@@ -49,4 +52,3 @@ class ExperimentLogger:
         filepath = os.path.join(self.log_dir, "evaluation.json")
         with open(filepath, 'w') as f:
             json.dump(model_evaluation, f, indent=4, cls=NpEncoder)
-

@@ -151,7 +151,7 @@ def main():
         strategy_seed = args.strategy_seed if args.strategy_seed is not None else np.random.randint(0, 100)
 
         # save experiment config
-        logger = ExperimentLogger(base_dir="experiments")
+        logger = ExperimentLogger(model_name=args.model, strategy_name=args.strategy, base_dir="experiments")
         logger.log_config(args, model_seed, strategy_seed)
 
         print(f"\nInitializing Model: {args.model}")
