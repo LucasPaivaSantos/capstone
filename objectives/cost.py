@@ -42,5 +42,5 @@ class CostObjective(BaseObjective):
     def get_direction(self):
         return 'minimize'
     
-    def get_display_name(self):
+    def get_name(self):
         return 'Cost (BRL)'
