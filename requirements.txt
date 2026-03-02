@@ -2,5 +2,6 @@ matplotlib
 numpy
 pandas
 pymoo
+seaborn
 scikit-learn
 xgboost
