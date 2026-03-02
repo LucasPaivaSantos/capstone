@@ -95,7 +95,7 @@ def load_strategy_data(target_model, base_dir="experiments"):
             else:
                 print(f"R2 not found in {eval_path}")
 
-        return pd.DataFrame(data)
+    return pd.DataFrame(data)
         
 
 def plot_strategy_comparison(df, target_model):
