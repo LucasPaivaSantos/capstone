@@ -45,12 +45,20 @@ def handle_cli_args():
         help="Base directory for experiments (default: experiments)"
     )
 
+    parser.add_argument(
+    "--metrics",
+    nargs='+',
+    choices=['r2', 'rmse'],
+    default=['r2'],
+    help="Metrics to plot"
+    )
+
     return parser.parse_args()
 
 
 def load_strategy_data(target_model, base_dir="experiments"):
     """
-    Reads all strategy folders for a specific model and extracts the R2 metrics.
+    Reads all strategy folders for a specific model and extracts the metrics.
     """
 
     model_dir = os.path.join(base_dir, target_model)
@@ -86,24 +94,28 @@ def load_strategy_data(target_model, base_dir="experiments"):
 
             eval_lower = {k.lower(): v for k, v in evaluation.items()}
             r2 = eval_lower.get('r2') or eval_lower.get('r2_mean') # look for r2 or r2_mean(for k-fold)
+            rmse = eval_lower.get('rmse') or eval_lower.get('rmse_mean')
             if r2 is not None:
                 data.append({
                 "Strategy": strategy,
                 "Experiment": exp_folder,
-                "R2": r2
+                "R2": r2,
+                "RMSE": rmse
                 })
             else:
-                print(f"R2 not found in {eval_path}")
+                print(f"Metrics not found in {eval_path}")
 
     return pd.DataFrame(data)
         
 
-def plot_strategy_comparison(df, target_model):
+def plot_strategy_comparison(df, target_model, metric_to_plot="r2"):
     """
-    Plots a Boxplot comparing the R2 Score of different strategies for the given model.
+    Plots a Boxplot comparing one metric of different strategies for the given model.
     """
 
-    if df.empty or df is None:
+    clean_df = df.dropna(subset=[metric_to_plot]) # drop rows where the metric is missing
+
+    if clean_df.empty or clean_df is None:
         print("No data available to plot.")
         return
     
@@ -113,18 +125,18 @@ def plot_strategy_comparison(df, target_model):
     plt.figure(figsize=(10, 10))
 
     # draw the graph (boxes)
-    sea.boxplot(data=df, x="Strategy", y="R2")
+    sea.boxplot(data=clean_df, x="Strategy", y=metric_to_plot)
 
     # draw each point; jitter adds random horizontal space to the point
-    sea.stripplot(data=df, x="Strategy", y="R2", color=".5", alpha=0.5, jitter=True)
+    sea.stripplot(data=clean_df, x="Strategy", y=metric_to_plot, color=".5", alpha=0.5, jitter=True)
 
     plt.title(f"Validation Strategy Comparison for Model: {target_model}", fontsize=14)
-    plt.ylabel("R^2 Score", fontsize=12)
+    plt.ylabel(f"{metric_to_plot} Score", fontsize=12)
     plt.xlabel("Validation Strategy", fontsize=12)
 
     plt.tight_layout() # prevents overflow
 
-    output_filename = f"strategy_comparison_r2_{target_model}.png"
+    output_filename = f"strategy_comparison_{metric_to_plot}_{target_model}.png"
     plt.savefig(output_filename)
     print(f"\nPlot saved as '{output_filename}'")
 
@@ -138,13 +150,15 @@ def main():
     args = handle_cli_args()
     
     target_model = args.model.lower()
+    metrics = args.metrics
     
     df_experiments = load_strategy_data(target_model, args.base_dir)
-    plot_strategy_comparison(df_experiments, target_model)
 
+    for metric in metrics:
+        plot_strategy_comparison(df_experiments, target_model, metric.upper())
+        print(df_experiments.groupby('Strategy')[metric.upper()].describe())
     
-    print(df_experiments.groupby('Strategy')['R2'].describe())
-    plot_strategy_comparison(df_experiments, target_model)
+    # plot_strategy_comparison(df_experiments, target_model)
 
 
 if __name__ == "__main__":
