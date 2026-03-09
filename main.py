@@ -13,6 +13,7 @@ from strategies.base import STRATEGY_REGISTRY
 from optimization.optimizer import run_optimization
 from utils.data_loader import load_and_validate_csv
 from utils.logger import ExperimentLogger
+from utils.plot_convergence import plot_strength_convergence
 
 def load_modules(package_name):
     """
@@ -110,6 +111,13 @@ def handle_cli_args():
         help="Number of Generations"
     )
 
+    # plot arguments
+    parser.add_argument(
+        "--plot",
+        action='store_true',
+        help="Plot and save the convergence curve for the best compressive strength"
+    )
+
     args = parser.parse_args()
 
     # error handling for incompatible arguments
@@ -202,6 +210,10 @@ def main():
         # save final Pareto front
         logger.log_optimization(best_solutions, best_fitness, feat_names, objective_instances)
         
+        # plot and save strength convergence curve
+        if args.plot:
+            plot_strength_convergence(history_best_strength, output_dir=logger.log_dir)
+    
     except Exception as e:
         # for erros I didn't anticipate
         print(f"\nUnexpected Error: {e}")
