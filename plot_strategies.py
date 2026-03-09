@@ -135,8 +135,9 @@ def plot_strategy_comparison(df, target_model, metric_to_plot="r2"):
     plt.xlabel("Validation Strategy", fontsize=12)
 
     plt.tight_layout() # prevents overflow
-
-    output_filename = f"strategy_comparison_{metric_to_plot}_{target_model}.png"
+    output_dir = "plots"
+    os.makedirs(output_dir, exist_ok=True)
+    output_filename = f"{output_dir}/strategy_comparison_{metric_to_plot}_{target_model}.png"
     plt.savefig(output_filename)
     print(f"\nPlot saved as '{output_filename}'")
 
