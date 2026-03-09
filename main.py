@@ -199,7 +199,9 @@ def main():
                 objectives=objective_instances
             )
         
-
+        # save final Pareto front
+        logger.log_optimization(best_solutions, best_fitness, feat_names, objective_instances)
+        
     except Exception as e:
         # for erros I didn't anticipate
         print(f"\nUnexpected Error: {e}")

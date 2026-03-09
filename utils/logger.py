@@ -52,3 +52,20 @@ class ExperimentLogger:
         filepath = os.path.join(self.log_dir, "evaluation.json")
         with open(filepath, 'w') as f:
             json.dump(model_evaluation, f, indent=4, cls=NpEncoder)
+
+    def log_optimization(self, best_solutions, best_fitness, feature_names, objectives):
+        """
+        Saves the experiment final Pareto front.
+        """
+        objective_names = ['strength'] + [obj.get_name() for obj in objectives]
+
+        pareto_front = []
+        for solution, fitness in zip(best_solutions, best_fitness):
+            entry = {}
+            entry['mix'] = {name: float(val) for name, val in zip(feature_names, solution)}
+            entry['objectives'] = {name: float(val) for name, val in zip(objective_names, fitness)}
+            pareto_front.append(entry)
+
+        filepath = os.path.join(self.log_dir, "pareto_front.json")
+        with open(filepath, 'w') as f:
+            json.dump(pareto_front, f, indent=4, cls=NpEncoder)
