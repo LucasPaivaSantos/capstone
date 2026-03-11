@@ -13,7 +13,8 @@ from strategies.base import STRATEGY_REGISTRY
 from optimization.optimizer import run_optimization
 from utils.data_loader import load_and_validate_csv
 from utils.logger import ExperimentLogger
-from utils.plot_convergence import plot_strength_convergence
+from utils.plots.plot_convergence import plot_strength_convergence
+from utils.plots.plot_pareto import plot_pareto_front
 
 def load_modules(package_name):
     """
@@ -114,8 +115,10 @@ def handle_cli_args():
     # plot arguments
     parser.add_argument(
         "--plot",
-        action='store_true',
-        help="Plot and save the convergence curve for the best compressive strength"
+        nargs='+',
+        choices=['strength_convergence', 'final_pareto_front'],
+        default=None,
+        help=("Plot and save Pareto front or the convergence curve for the best compressive strength.")
     )
 
     args = parser.parse_args()
@@ -209,10 +212,20 @@ def main():
         
         # save final Pareto front
         logger.log_optimization(best_solutions, best_fitness, feat_names, objective_instances)
-        
-        # plot and save strength convergence curve
+
+        # plot and save graphs
         if args.plot:
-            plot_strength_convergence(history_best_strength, output_dir=logger.log_dir)
+            if 'strength_convergence' in args.plot:
+                plot_strength_convergence(history_best_strength, output_dir=logger.log_dir)
+
+            if 'final_pareto_front' in args.plot:
+                plot_pareto_front(
+                    best_solutions=best_solutions,
+                    best_fitness=best_fitness,
+                    feature_names=feat_names,
+                    objectives=objective_instances,
+                    output_dir=logger.log_dir
+                )
     
     except Exception as e:
         # for erros I didn't anticipate
