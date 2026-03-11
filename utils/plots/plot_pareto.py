@@ -94,7 +94,10 @@ def _plot_3d(best_fitness, objectives, output_dir):
         strength,
         obj1,
         obj2,
+        c=strength,
+        cmap="copper",
         linewidths=1,
+        s=100 # dots size
     )
 
     plt.gca().set_title("Final Pareto Front", fontsize=14)
