@@ -53,19 +53,25 @@ class ExperimentLogger:
         with open(filepath, 'w') as f:
             json.dump(model_evaluation, f, indent=4, cls=NpEncoder)
 
-    def log_optimization(self, best_solutions, best_fitness, feature_names, objectives):
+    def log_pareto_history(self, history_pareto_fronts, feature_names, objectives):
         """
-        Saves the experiment final Pareto front.
+        Saves the Pareto front history across all generations.
+        Each entry in the output represents one generation and contains
+        the respective Pareto front.
         """
         objective_names = ['strength'] + [obj.get_name() for obj in objectives]
 
-        pareto_front = []
-        for solution, fitness in zip(best_solutions, best_fitness):
-            entry = {}
-            entry['mix'] = {name: float(val) for name, val in zip(feature_names, solution)}
-            entry['objectives'] = {name: float(val) for name, val in zip(objective_names, fitness)}
-            pareto_front.append(entry)
+        history = []
+        for gen_idx, gen_pareto_front in enumerate(history_pareto_fronts):
+            gen_entry = {
+                'generation': gen_idx + 1,
+                'pareto_front': [
+                    {'objectives': {name: float(val) for name, val in zip(objective_names, fitness)}}
+                    for fitness in gen_pareto_front
+                ]
+            }
+            history.append(gen_entry)
 
-        filepath = os.path.join(self.log_dir, "pareto_front.json")
+        filepath = os.path.join(self.log_dir, "pareto_history.json")
         with open(filepath, 'w') as f:
-            json.dump(pareto_front, f, indent=4, cls=NpEncoder)
+            json.dump(history, f, indent=4, cls=NpEncoder)

@@ -210,8 +210,8 @@ def main():
                 objectives=objective_instances
             )
         
-        # save final Pareto front
-        logger.log_optimization(best_solutions, best_fitness, feat_names, objective_instances)
+        # save Pareto front history
+        logger.log_pareto_history(history_pareto_fronts, feat_names, objective_instances)
 
         # plot and save graphs
         if args.plot:
