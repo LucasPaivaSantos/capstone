@@ -87,3 +87,7 @@ class ExperimentLogger:
         filepath = os.path.join(self.log_dir, "pareto_history.json")
         with open(filepath, 'w') as f:
             json.dump(history, f, indent=4, cls=NpEncoder)
+
+        filepath = os.path.join(self.log_dir, "final_pareto_front.json")
+        with open(filepath, 'w') as f:
+            json.dump(history[-1], f, indent=4, cls=NpEncoder)
