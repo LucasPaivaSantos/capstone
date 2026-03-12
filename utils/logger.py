@@ -56,18 +56,30 @@ class ExperimentLogger:
     def log_pareto_history(self, history_pareto_fronts, feature_names, objectives):
         """
         Saves the Pareto front history across all generations.
-        Each entry in the output represents one generation and contains
-        the respective Pareto front.
+        Each solution entry contains both its objective values and the
+        ingredient proportions that produced them.
         """
         objective_names = ['strength'] + [obj.get_name() for obj in objectives]
 
         history = []
-        for gen_idx, gen_pareto_front in enumerate(history_pareto_fronts):
+        for gen_idx, gen in enumerate(history_pareto_fronts):
+            gen_F = gen['F']
+            gen_X = gen['X']
+
             gen_entry = {
                 'generation': gen_idx + 1,
                 'pareto_front': [
-                    {'objectives': {name: float(val) for name, val in zip(objective_names, fitness)}}
-                    for fitness in gen_pareto_front
+                    {
+                        'objectives': {
+                            name: float(val)
+                            for name, val in zip(objective_names, fitness)
+                        },
+                        'proportions': {
+                            name: float(val)
+                            for name, val in zip(feature_names, proportions)
+                        }
+                    }
+                    for fitness, proportions in zip(gen_F, gen_X)
                 ]
             }
             history.append(gen_entry)

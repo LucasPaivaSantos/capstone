@@ -71,7 +71,8 @@ def run_optimization(model, X_train, pop_size=100, n_gen=50, seed=1, objectives=
         best_solutions: Array of Pareto optimal solutions
         best_fitness: Array of fitness values for Pareto solutions
         feature_names: List of feature names
-        history_pareto_fronts: List containing the Pareto front of each generation (List[np.ndarray])
+        history_pareto_fronts: List of dicts per generation, each with:
+                               'F' (objective values) and 'X' (proportions)
         history_best_strength: List containing the best strength value found in each generation (List[float])
     """
 
@@ -132,14 +133,15 @@ def run_optimization(model, X_train, pop_size=100, n_gen=50, seed=1, objectives=
 
     if result.history:
         for gen in result.history:
-            target_gen = gen.opt.get("F").copy() # get the objective values for the current generation's Pareto front
-            target_gen[:, 0] = -target_gen[:, 0] # convert strength
+            gen_F = gen.opt.get("F").copy() # get the objective values for the current generation's Pareto front
+            gen_X = gen.opt.get("X").copy() # get the decision variables
+            gen_F[:, 0] = -gen_F[:, 0] # convert strength
 
             # store full Pareto front for this generation
-            history_pareto_fronts.append(target_gen)
+            history_pareto_fronts.append({'F': gen_F, 'X': gen_X})
 
             # track best strength in this generation
-            best_strength = np.max(target_gen[:, 0]) 
+            best_strength = np.max(gen_F[:, 0])
             history_best_strength.append(float(best_strength))
 
     return best_solutions, best_fitness, feature_names, history_pareto_fronts, history_best_strength
