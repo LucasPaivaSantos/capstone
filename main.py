@@ -13,7 +13,7 @@ from strategies.base import STRATEGY_REGISTRY
 from optimization.optimizer import run_optimization
 from utils.data_loader import load_and_validate_csv
 from utils.logger import ExperimentLogger
-from utils.plots.plot_convergence import plot_strength_convergence
+from utils.plots.plot_convergence import plot_objective_convergence
 from utils.plots.plot_pareto import plot_pareto_front
 
 def load_modules(package_name):
@@ -116,9 +116,11 @@ def handle_cli_args():
     parser.add_argument(
         "--plot",
         nargs='+',
-        choices=['strength_convergence', 'final_pareto_front'],
+        choices=['final_pareto_front', 'strength'] + list(OBJECTIVE_REGISTRY.keys()),
         default=None,
-        help=("Plot and save Pareto front or the convergence curve for the best compressive strength.")
+        help=(
+            "Plots to generate. 'final_pareto_front' plots the Pareto front. Any objective name plots its best value over generations."
+        )
     )
 
     args = parser.parse_args()
@@ -215,18 +217,32 @@ def main():
 
         # plot and save graphs
         if args.plot:
-            if 'strength_convergence' in args.plot:
-                plot_strength_convergence(history_best_strength, output_dir=logger.log_dir)
+            # build a list of all objectives: strength is always index 0
+            all_objectives = [('strength', 0)] + [
+                (obj.get_name(), idx + 1) for idx, obj in enumerate(objective_instances)
+            ]
 
-            if 'final_pareto_front' in args.plot:
-                plot_pareto_front(
-                    best_solutions=best_solutions,
-                    best_fitness=best_fitness,
-                    feature_names=feat_names,
-                    objectives=objective_instances,
-                    output_dir=logger.log_dir
-                )
-    
+            obj_key_to_plot = {'strength': ('strength', 0)}
+            for obj_name, (display_name, idx) in zip(args.objectives, all_objectives[1:]):
+                obj_key_to_plot[obj_name] = (display_name, idx)
+
+            for plot_target in args.plot:
+                if plot_target in obj_key_to_plot:
+                    display_name, obj_idx = obj_key_to_plot[plot_target]
+                    plot_objective_convergence(
+                        history_pareto_fronts=history_pareto_fronts,
+                        objective_name=display_name,
+                        objective_index=obj_idx,
+                        output_dir=logger.log_dir
+                    )    
+                elif plot_target == 'final_pareto_front':
+                    plot_pareto_front(
+                        best_solutions=best_solutions,
+                        best_fitness=best_fitness,
+                        feature_names=feat_names,
+                        objectives=objective_instances,
+                        output_dir=logger.log_dir
+                    )
     except Exception as e:
         # for erros I didn't anticipate
         print(f"\nUnexpected Error: {e}")
