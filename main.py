@@ -16,6 +16,8 @@ from utils.logger import ExperimentLogger
 from utils.plots.plot_convergence import plot_objective_convergence
 from utils.plots.plot_pareto import plot_pareto_front
 
+MAX_R2_ATTEMPTS = 100
+
 def load_modules(package_name):
     """
     Dynamically loads all modules in the specified package by joining their names.
@@ -63,7 +65,7 @@ def handle_cli_args():
     # strategy arguments
     parser.add_argument(
         "--strategy", "-s",
-        # required=True, 
+        required=True, 
         choices=STRATEGY_REGISTRY.keys(),
         help="Validation Strategy"
     )
@@ -112,6 +114,18 @@ def handle_cli_args():
         help="Number of Generations"
     )
 
+    # r2 minimum threshold argument
+    parser.add_argument(
+        "--min-r2",
+        type=float,
+        default=None,
+        dest="min_r2",
+        help=(
+            "Minimum R² threshold for the model. Only active when seeds are not manually provided. "
+            "The program will retry with new random seeds (up to 100 attempts) until the threshold is met."
+        )
+    )
+
     # plot arguments
     parser.add_argument(
         "--plot",
@@ -134,6 +148,18 @@ def handle_cli_args():
     if args.n_splits is not None and args.strategy != 'k-fold':
         parser.error(f"The argument '--n_splits' is not allowed with strategy '{args.strategy}'. It is only valid for 'k-fold'.")
 
+    # min-r2 is ignored when seeds are manually provided
+    if args.min_r2 is not None and (args.model_seed is not None or args.strategy_seed is not None):
+        print(
+            "Warning: '--min-r2' is ignored when '--model_seed' or '--strategy_seed' are provided. "
+            "Proceeding with the supplied seeds."
+        )
+        args.min_r2 = None
+
+    # validate min-r2 range
+    if args.min_r2 is not None and not (0.0 < args.min_r2 <= 1.0):
+        parser.error("'--min-r2' must be a value between 0 (exclusive) and 1 (inclusive).")
+
     # set defaults based on strategy
     if args.strategy == 'train-split' and args.test_size is None:
         args.test_size = 0.2
@@ -145,6 +171,35 @@ def handle_cli_args():
 
     return args
 
+
+def evaluate_model(model_cls, strategy_cls, model_seed, strategy_seed, X, y, args):
+    """
+    Instantiates and evaluates a model with the given seeds.
+    Returns (model_instance, strategy_instance, model_evaluation).
+    """
+    model_instance = model_cls(seed=model_seed)
+    strategy_instance = strategy_cls(seed=strategy_seed)
+
+    eval_kwargs = {}
+    if args.strategy == 'train-split':
+        eval_kwargs['test_size'] = args.test_size
+    elif args.strategy == 'k-fold':
+        eval_kwargs['n_splits'] = args.n_splits
+
+    model_evaluation = strategy_instance.evaluate(model_instance, X, y, **eval_kwargs)
+    return model_instance, strategy_instance, model_evaluation
+
+
+def get_r2_from_evaluation(model_evaluation):
+    """
+    Extracts the R² value from an evaluation dict.
+    Looks for keys: 'r2', 'R2', 'r²', 'R²'.
+    Returns None if not found.
+    """
+    for key in ('r2', 'R2', 'r²', 'R²'):
+        if key in model_evaluation:
+            return model_evaluation[key]
+    return None
 
 
 def main():
@@ -159,50 +214,104 @@ def main():
     try:
         X, y = load_and_validate_csv(args.csv_path)
 
-        # generate or use provided seeds
-        model_seed = args.model_seed if args.model_seed is not None else np.random.randint(0, 100)
-        strategy_seed = args.strategy_seed if args.strategy_seed is not None else np.random.randint(0, 100)
+        model_cls = MODEL_REGISTRY[args.model]
+        strategy_cls = STRATEGY_REGISTRY[args.strategy]
 
-        # save experiment config
+        # --- Seed resolution and evaluation ---
+        use_min_r2 = args.min_r2 is not None
+
+        if use_min_r2:
+            # Retry loop: draw new random seeds until R² threshold is met or limit is reached
+            print(f"\nMin-R² mode enabled. Target R² ≥ {args.min_r2} (max {MAX_R2_ATTEMPTS} attempts)")
+
+            model_seed = None
+            strategy_seed = None
+            model_instance = None
+            model_evaluation = None
+            achieved = False
+
+            for attempt in range(1, MAX_R2_ATTEMPTS + 1):
+                candidate_model_seed = np.random.randint(0, 10_000)
+                candidate_strategy_seed = np.random.randint(0, 10_000)
+
+                print(f"\n[Attempt {attempt}/{MAX_R2_ATTEMPTS}] "
+                      f"model_seed={candidate_model_seed}, strategy_seed={candidate_strategy_seed}")
+
+                m_instance, _, m_evaluation = evaluate_model(
+                    model_cls, strategy_cls,
+                    candidate_model_seed, candidate_strategy_seed,
+                    X, y, args
+                )
+
+                r2 = get_r2_from_evaluation(m_evaluation)
+
+                if r2 is None:
+                    print("  Warning: R² metric not found in evaluation results. Skipping min-r2 check.")
+                    # treat as achieved so the program continues normally
+                    model_seed = candidate_model_seed
+                    strategy_seed = candidate_strategy_seed
+                    model_instance = m_instance
+                    model_evaluation = m_evaluation
+                    achieved = True
+                    break
+
+                print(f"  R² = {r2:.6f} (target ≥ {args.min_r2})")
+
+                if r2 >= args.min_r2:
+                    print(f"  ✓ R² threshold met on attempt {attempt}.")
+                    model_seed = candidate_model_seed
+                    strategy_seed = candidate_strategy_seed
+                    model_instance = m_instance
+                    model_evaluation = m_evaluation
+                    achieved = True
+                    break
+
+            if not achieved:
+                print(
+                    f"\nWarning: R² threshold of {args.min_r2} was not reached after {MAX_R2_ATTEMPTS} attempts. "
+                    "Proceeding with the best available result from the last attempt."
+                )
+                # use seeds from the last attempt
+                model_seed = candidate_model_seed
+                strategy_seed = candidate_strategy_seed
+                model_instance = m_instance
+                model_evaluation = m_evaluation
+
+        else:
+            # Original behaviour: use provided seeds or generate once
+            model_seed = args.model_seed if args.model_seed is not None else np.random.randint(0, 100)
+            strategy_seed = args.strategy_seed if args.strategy_seed is not None else np.random.randint(0, 100)
+
+            print(f"\nInitializing Model: {args.model}")
+            if args.model != 'svr':
+                print(f" with seed {model_seed}")
+            print(f"\nExecuting Strategy: {args.strategy} with seed {strategy_seed}")
+            if args.strategy == 'train-split':
+                print(f"Configuration: Test Size = {args.test_size}")
+            elif args.strategy == 'k-fold':
+                print(f"Configuration: Number of Folds = {args.n_splits}")
+
+            model_instance, _, model_evaluation = evaluate_model(
+                model_cls, strategy_cls,
+                model_seed, strategy_seed,
+                X, y, args
+            )
+
+        # --- Logging ---
         logger = ExperimentLogger(model_name=args.model, strategy_name=args.strategy, base_dir="experiments")
         logger.log_config(args, model_seed, strategy_seed)
-
-        print(f"\nInitializing Model: {args.model}")
-        if args.model != 'svr':
-            print(f" with seed {model_seed}")
-        model_cls = MODEL_REGISTRY[args.model] # pick the class from the registry
-        model_instance = model_cls(seed=model_seed) # instantiate the model with the seed
-
-        print(f"\nExecuting Strategy: {args.strategy} with seed {strategy_seed}")
-        strategy_cls = STRATEGY_REGISTRY[args.strategy] # pick the class from the registry
-        strategy_instance = strategy_cls(seed=strategy_seed)
-
-        # prepare evaluation kwargs based on strategy
-        eval_kwargs = {}
-        if args.strategy == 'train-split':
-            eval_kwargs['test_size'] = args.test_size
-            print(f"Configuration: Test Size = {args.test_size}")
-        elif args.strategy == 'k-fold':
-            eval_kwargs['n_splits'] = args.n_splits
-            print(f"Configuration: Number of Folds = {args.n_splits}")
-
-        # run evaluation
-        model_evaluation = strategy_instance.evaluate(model_instance, X, y, **eval_kwargs)
-
-        # save evaluation metrics
         logger.log_evaluation(model_evaluation)
-        
+
         # print model evaluation results
         print("\nEvaluation Metrics:")
         for metric, value in model_evaluation.items():
             print(f" - {metric}: {value}")
-        
+
         print("Retraining model for optimization") # model trained on full dataset for optimization, same seed
         model_instance.fit(X, y)
 
         # run optimization
-        optimization_results = None
-        objective_instances = [OBJECTIVE_REGISTRY[obj_name]() for obj_name in args.objectives] # pick the classes from the registry
+        objective_instances = [OBJECTIVE_REGISTRY[obj_name]() for obj_name in args.objectives]
         best_solutions, best_fitness, feat_names, history_pareto_fronts, history_best_strength = run_optimization(
                 model=model_instance,
                 X_train=X,
