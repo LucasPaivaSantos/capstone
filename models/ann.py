@@ -14,7 +14,7 @@ class ANNModel(BaseModel):
             StandardScaler(),
             MLPRegressor(
                 hidden_layer_sizes=(100, 50), # TODO: try other parameters here
-                activation='tanh',
+                activation='relu', # activation function for the hidden layers
                 solver='lbfgs', # optimizer suitable for smaller datasets
                 max_iter=4000,
                 random_state=self.seed
