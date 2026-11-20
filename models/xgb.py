@@ -7,8 +7,10 @@ class XGBoostModel(BaseModel):
         super().__init__(seed)
         print(f"XGBoost initialized with seed: {self.seed}")
         self.model = xgb.XGBRegressor(
-            objective='reg:squarederror', 
-            random_state=self.seed
+            objective='reg:squarederror',
+            random_state=self.seed,
+            subsample=0.8,
+            colsample_bytree=0.8 # https://xgboost.readthedocs.io/en/latest/parameter.html
         )
 
     def fit(self, X, y):
