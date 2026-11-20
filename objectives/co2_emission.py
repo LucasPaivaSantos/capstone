@@ -22,7 +22,7 @@ class CO2EmissionObjective(BaseObjective):
 
     def calculate(self, feature_values, feature_names):
         """
-        Calculate CO2 emission value.
+        Calculate CO2 emission value in Kg.
         
         Args:
             feature_values (array): Array of feature values
