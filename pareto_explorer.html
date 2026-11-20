@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pareto Front Explorer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #ffffff;
+      --text: #14171a;
+      --line: #14171a;
+      --muted: #6b7280;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    .meta {
+      font-size: 12px;
+    }
+
+    .workspace {
+      display: flex;
+      flex: 1;
+    }
+
+    .chart-area {
+      flex: 1;
+      position: relative;
+    }
+
+    #plot {
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drop-overlay.hidden {
+      display: none;
+    }
+
+    .drop-zone {
+      border: 1px dashed #14171a;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .drop-zone:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .drop-title {
+      margin-bottom: 6px;
+    }
+
+    .drop-sub {
+      font-size: 12px;
+    }
+
+    .sidebar {
+      width: 260px;
+      border-left: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .sidebar-title {
+      font-size: 12px;
+    }
+
+    .stats-grid {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-card {
+      border: 1px solid var(--line);
+      padding: 8px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .inspector {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .inspector-prompt {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    .section-label {
+      margin-top: 16px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 4px;
+    }
+
+    .obj-row,
+    .prop-row,
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px;
+      border: 1px solid var(--line);
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .bar-wrap,
+    .bar-fill,
+    .prop-bar-wrap,
+    .prop-bar-fill {
+      display: none;
+    }
+
+    .detail-section-title {
+      margin-top: 12px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      padding-bottom: 4px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 1px solid var(--line);
+      padding: 8px 14px;
+      font-size: 12px;
+      background: #ffffff;
+      color: var(--text);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="meta" id="header-meta">No data loaded</div>
+  </header>
+
+  <div class="workspace">
+    <div class="chart-area">
+      <div id="plot"></div>
+
+      <div class="drop-overlay" id="drop-overlay">
+        <div class="drop-zone" id="drop-zone">
+          <span class="drop-icon">⬡</span>
+          <div class="drop-title">Load Experiment Data</div>
+          <div class="drop-sub">
+            Drop an <strong>aggregated.json</strong> here<br>
+            or individual <strong>pareto_history.json</strong> files<br><br>
+            <span style="color:var(--muted)">Multiple files aggregate runs</span>
+          </div>
+        </div>
+        <input type="file" id="file-input" accept=".json" multiple />
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Run Summary</div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Runs</div>
+          <div class="stat-value" id="stat-runs">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Solutions</div>
+          <div class="stat-value" id="stat-solutions">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Objectives</div>
+          <div class="stat-value" id="stat-objectives">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Ingredients</div>
+          <div class="stat-value" id="stat-ingredients">—</div>
+        </div>
+      </div>
+      <div class="inspector" id="inspector">
+        <div class="inspector-prompt" id="inspector-prompt">
+          <span class="arrow">↙</span>
+          Click any point on the<br>scatter plot to inspect<br>its mixture proportions
+        </div>
+        <div class="detail-panel" id="detail-panel"></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let allSolutions = [];
+    let objectiveNames = /** @type {string[]} */ ([]);
+    let ingredientNames = /** @type {string[]} */ ([]);
+    let runCount = 0;
+
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show' + (isError ? ' error' : '');
+      setTimeout(() => el.className = 'toast' + (isError ? ' error' : ''), 2800);
+    }
+
+    function fmt(v) { return typeof v === 'number' ? v.toFixed(3) : v; }
+
+
+    function extractFinalPareto(history) {
+      const final = history[history.length - 1];
+      return final.pareto_front;
+    }
+
+    function validateSolution(sol) {
+      if (!sol.proportions) throw new Error(
+        'pareto_history.json is missing "proportions" data.\n' +
+        'Please re-run your experiments with the updated logger.py and optimizer.py.'
+      );
+    }
+
+    function parseJsonFile(parsed, filename) {
+      if (parsed && parsed.meta && Array.isArray(parsed.solutions)) {
+        const { solutions, meta } = parsed;
+        if (solutions.length === 0) throw new Error('No solutions in aggregated file.');
+        validateSolution(solutions[0]);
+        return {
+          solutions,
+          objNames: meta.objectives,
+          ingNames: meta.ingredients,
+          runs: meta.runs,
+        };
+      }
+
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) throw new Error('Empty history array.');
+        const sols = extractFinalPareto(parsed);
+        if (sols.length === 0) throw new Error('Final generation has no solutions.');
+        validateSolution(sols[0]);
+        return {
+          solutions: sols,
+          objNames: Object.keys(sols[0].objectives),
+          ingNames: Object.keys(sols[0].proportions),
+          runs: 1,
+        };
+      }
+
+      throw new Error(`Unrecognised file format in ${filename}.`);
+    }
+
+    async function loadFiles(files) {
+      const newSolutions = /** @type {Solution[]} */ ([]);
+      let newRuns = 0;
+      let detectedObjectiveNames = /** @type {string[]|null} */ (null);
+      let detectedIngredientNames = /** @type {string[]|null} */ (null);
+      const errors = [];
+
+      for (const file of files) {
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const { solutions, objNames, ingNames, runs } = parseJsonFile(parsed, file.name);
+
+          if (detectedObjectiveNames === null) {
+            detectedObjectiveNames = objNames;
+            detectedIngredientNames = ingNames;
+          } else if (JSON.stringify(objNames) !== JSON.stringify(detectedObjectiveNames)) {
+            throw new Error('Objective names differ from other loaded files. Skipping.');
+          }
+
+          newSolutions.push(...solutions);
+          newRuns += runs;
+        } catch (e) {
+          errors.push(`${file.name}: ${e.message}`);
+        }
+      }
+
+      if (errors.length) showToast(errors[0], true);
+      if (newSolutions.length === 0) return;
+
+      if (allSolutions.length > 0 &&
+        JSON.stringify(detectedObjectiveNames) !== JSON.stringify(objectiveNames)) {
+        showToast('Objective mismatch with already-loaded data. Clear first.', true);
+        return;
+      }
+
+      allSolutions = [...allSolutions, ...newSolutions];
+      objectiveNames = detectedObjectiveNames;
+      ingredientNames = detectedIngredientNames;
+      runCount += newRuns;
+
+      updateStats();
+      renderPlot();
+      document.getElementById('drop-overlay').classList.add('hidden');
+      showToast(`Loaded ${newRuns} run(s) — ${newSolutions.length} solutions`);
+    }
+
+    function updateStats() {
+      document.getElementById('stat-runs').textContent = String(runCount);
+      document.getElementById('stat-solutions').textContent = String(allSolutions.length);
+      document.getElementById('stat-objectives').textContent = String(objectiveNames.length);
+      document.getElementById('stat-ingredients').textContent = String(ingredientNames.length);
+      document.getElementById('header-meta').textContent =
+        `${runCount} run(s) · ${allSolutions.length} solutions · ${objectiveNames.join(', ')}`;
+    }
+
+    function renderPlot() {
+      if (objectiveNames.length < 3) {
+        showToast('Need at least 3 objectives for 3D plot.', true);
+        return;
+      }
+
+      const [ox, oy, oz] = objectiveNames;
+      const xs = allSolutions.map(s => s.objectives[ox]);
+      const ys = allSolutions.map(s => s.objectives[oy]);
+      const zs = allSolutions.map(s => s.objectives[oz]);
+
+      const texts = allSolutions.map((s, i) => {
+        const objLines = objectiveNames.map(n => `${n}: ${fmt(s.objectives[n])}`).join('<br>');
+        return `<b>Solution #${i}</b><br>${objLines}`;
+      });
+
+      const trace = {
+        type: 'scatter3d',
+        mode: 'markers',
+        x: xs, y: ys, z: zs,
+        text: texts,
+        hoverinfo: 'text',
+        marker: {
+          size: 5,
+          color: xs,
+          colorscale: 'Plasma',
+          showscale: true,
+          colorbar: {
+            title: { text: ox, font: { color: '#4b5563', size: 11 } },
+            tickfont: { color: '#4b5563', size: 10 },
+            thickness: 14,
+            len: 0.6,
+            x: 1.02,
+          },
+          opacity: 0.85,
+          line: { width: 0 },
+        },
+      };
+
+      const layout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        margin: { l: 0, r: 60, t: 20, b: 0 },
+        scene: {
+          bgcolor: 'transparent',
+          xaxis: axStyle(ox),
+          yaxis: axStyle(oy),
+          zaxis: axStyle(oz),
+          camera: { eye: { x: 1.5, y: 1.5, z: 0.8 } },
+        },
+        font: { family: 'DM Mono, monospace', color: '#4b5563' },
+        hoverlabel: {
+          bgcolor: '#ffffff',
+          bordercolor: '#d1d5db',
+          font: { family: 'DM Mono, monospace', color: '#14171a', size: 12 },
+        },
+      };
+
+      const config = {
+        responsive: true, displaylogo: false,
+        modeBarButtonsToRemove: ['toImage', 'resetCameraLastSave3d']
+      };
+
+      Plotly.react('plot', [trace], layout, config);
+
+      const plotEl = document.getElementById('plot');
+      plotEl.on('plotly_hover', (data) => {
+        if (!data || !data.points || !data.points.length) return;
+        const pt = data.points[0];
+        const px = pt.x, py = pt.y, pz = pt.z;
+        const [ox, oy, oz] = objectiveNames;
+        const idx = allSolutions.findIndex(s =>
+          s.objectives[ox] === px &&
+          s.objectives[oy] === py &&
+          s.objectives[oz] === pz
+        );
+        if (idx === -1) return;
+        showDetail(allSolutions[idx], idx);
+      });
+    }
+
+    function axStyle(title) {
+      return {
+        title: { text: title, font: { color: '#4b5563', size: 11 } },
+        tickfont: { color: '#6b7280', size: 9 },
+        gridcolor: '#e5e7eb',
+        linecolor: '#d1d5db',
+        zerolinecolor: '#d1d5db',
+        backgroundcolor: 'transparent',
+      };
+    }
+
+    function showDetail(sol, idx) {
+      if (!sol.proportions || Object.keys(sol.proportions).length === 0) {
+        const panel = document.getElementById('detail-panel');
+        panel.innerHTML = '<div class="detail-section-title" style="color:#d00000">No proportions data — re-run with updated logger.py</div>';
+        document.getElementById('inspector-prompt').style.display = 'none';
+        panel.classList.add('visible');
+        return;
+      }
+      const propVals = Object.values(sol.proportions);
+      const propMin = propVals.reduce((a, b) => a < b ? a : b, Infinity);
+      const propMax = propVals.reduce((a, b) => a > b ? a : b, -Infinity);
+
+      const panel = document.getElementById('detail-panel');
+      panel.innerHTML = '';
+
+      const t1 = document.createElement('div');
+      t1.className = 'detail-section-title';
+      t1.textContent = `Solution #${idx} — Objectives`;
+      panel.appendChild(t1);
+
+      objectiveNames.forEach(n => {
+        const row = document.createElement('div');
+        row.className = 'detail-row';
+        row.innerHTML = `<span class="key">${n}</span><span class="val-obj">${fmt(sol.objectives[n])}</span>`;
+        panel.appendChild(row);
+      });
+
+      const t2 = document.createElement('div');
+      t2.className = 'detail-section-title';
+      t2.textContent = 'Ingredient Proportions';
+      panel.appendChild(t2);
+
+      ingredientNames.forEach(n => {
+        const v = sol.proportions[n];
+        const pct = propMax > propMin ? ((v - propMin) / (propMax - propMin)) * 100 : 50;
+        const row = document.createElement('div');
+        row.className = 'detail-row';
+        row.innerHTML = `<span class="key">${n}</span><span class="val-prop">${fmt(v)}</span>`;
+        const bar = document.createElement('div');
+        bar.className = 'prop-bar-wrap';
+        bar.innerHTML = `<div class="prop-bar-fill" style="width:${pct.toFixed(1)}%"></div>`;
+        panel.appendChild(row);
+        panel.appendChild(bar);
+      });
+
+      document.getElementById('inspector-prompt').style.display = 'none';
+      panel.classList.add('visible');
+    }
+
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      loadFiles(Array.from(e.target.files));
+      e.target.value = '';
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      loadFiles(Array.from(e.dataTransfer.files));
+    });
+
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.json'));
+      if (files.length) loadFiles(files);
+    });
+  </script>
+</body>
+
+</html>
